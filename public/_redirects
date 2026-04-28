@@ -1,0 +1,4 @@
+# Cloudflare Pages SPA fallback for /work/<uuid> URLs.
+# 200 = rewrite (URL 在浏览器里保持原样, 实际返回 /work/index.html 内容).
+# 客户端 app/work/page.tsx 会从 window.location.pathname 里再解析出 id.
+/work/* /work/ 200

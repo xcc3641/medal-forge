@@ -882,7 +882,8 @@ export function WorkspaceHome() {
     setIsImportingShowcase(true);
 
     try {
-      const response = await fetch("/api/showcase");
+      // 静态导出后没有 /api 路由, 直接拉 public/ 下的 zip 静态资源.
+      const response = await fetch("/showcase/medal-forge-works.zip");
 
       if (!response.ok) {
         throw new Error(`Showcase import failed with ${response.status}`);
