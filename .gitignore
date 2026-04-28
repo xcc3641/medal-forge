@@ -9,3 +9,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+
+# 项目用 npm (package-lock.json), 其它包管理器的锁文件不入库
+pnpm-lock.yaml
+yarn.lock
+
+# tsc 增量编译缓存
+*.tsbuildinfo
