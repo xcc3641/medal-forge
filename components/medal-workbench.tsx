@@ -28,6 +28,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { useRouter } from "next/navigation";
 import { ModelPreview } from "@/components/model-preview";
@@ -37,6 +38,13 @@ import {
   DEFAULT_SVG,
 } from "@/lib/defaults";
 import { downloadBlob, exportMedalGlb } from "@/lib/export-model";
+import {
+  getServerGlbExportOptions,
+  loadGlbExportOptions,
+  saveGlbExportOptions,
+  subscribeGlbExportOptions,
+  type GlbExportOptions,
+} from "@/lib/export-options";
 import { MATERIAL_PRESETS } from "@/lib/materials";
 import { getShapeLabel, getSvgColor, resolveShapeSettings } from "@/lib/shape-settings";
 import { summarizeSvgPaths } from "@/lib/svg-summary";
@@ -121,6 +129,47 @@ function formatNumericValue(value: number, step: number) {
   }
 
   return value.toFixed(getNumericPrecision(step));
+}
+
+interface ExportOptionRowProps {
+  label: string;
+  hint: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+  disabled?: boolean;
+  disabledHint?: string;
+}
+
+function ExportOptionRow({
+  label,
+  hint,
+  checked,
+  onChange,
+  disabled = false,
+  disabledHint,
+}: ExportOptionRowProps) {
+  return (
+    <label
+      className={
+        disabled
+          ? "export-option-row export-option-row-disabled"
+          : "export-option-row"
+      }
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      <span className="export-option-text">
+        <span className="export-option-label">{label}</span>
+        <span className="export-option-hint">
+          {disabled && disabledHint ? disabledHint : hint}
+        </span>
+      </span>
+    </label>
+  );
 }
 
 function clampNumericValue(value: number, min?: number, max?: number) {
@@ -595,6 +644,21 @@ export function MedalWorkbench({ initialWorkId }: MedalWorkbenchProps) {
   );
   const [layerNameDraft, setLayerNameDraft] = useState("");
   const [hasPersistedWork, setHasPersistedWork] = useState(false);
+  // SSR safe: 用 useSyncExternalStore 订阅 localStorage. server snapshot = 默认值,
+  // client snapshot = 实际存储值. 跨 tab + 同 tab 都能监听到变更.
+  const exportOptions = useSyncExternalStore(
+    subscribeGlbExportOptions,
+    loadGlbExportOptions,
+    getServerGlbExportOptions,
+  );
+  const [isExportOptionsOpen, setIsExportOptionsOpen] = useState(false);
+  const updateExportOption = useCallback(
+    <K extends keyof GlbExportOptions>(key: K, value: GlbExportOptions[K]) => {
+      saveGlbExportOptions({ ...loadGlbExportOptions(), [key]: value });
+      // saveGlbExportOptions 会派发 change 事件 → useSyncExternalStore 自动重读.
+    },
+    [],
+  );
   const selectionAnchorRef = useRef<number | null>(null);
   const suppressLayerClickRef = useRef(false);
   const uploadInputRef = useRef<HTMLInputElement>(null);
@@ -1432,7 +1496,7 @@ export function MedalWorkbench({ initialWorkId }: MedalWorkbenchProps) {
     setStatus("Preparing GLB export");
 
     try {
-      const blob = await exportMedalGlb(svgText, settings);
+      const blob = await exportMedalGlb(svgText, settings, exportOptions);
       downloadBlob(blob, `${getFileStem(fileName)}.glb`);
       setStatus("GLB exported");
     } catch {
@@ -2055,6 +2119,66 @@ export function MedalWorkbench({ initialWorkId }: MedalWorkbenchProps) {
               <div className="section-title">
                 <span>Export</span>
                 <Download size={14} />
+              </div>
+              <div className="export-options">
+                <button
+                  aria-expanded={isExportOptionsOpen}
+                  className="export-options-toggle"
+                  onClick={() => setIsExportOptionsOpen((value) => !value)}
+                  type="button"
+                >
+                  <ChevronDown
+                    size={14}
+                    style={{
+                      transform: isExportOptionsOpen
+                        ? "rotate(0deg)"
+                        : "rotate(-90deg)",
+                      transition: "transform 120ms ease",
+                    }}
+                  />
+                  <span>Optimize GLB</span>
+                  <span className="export-options-count">
+                    {Object.values(exportOptions).filter(Boolean).length}/4
+                  </span>
+                </button>
+                {isExportOptionsOpen ? (
+                  <div className="export-options-list">
+                    <ExportOptionRow
+                      label="Weld vertices"
+                      hint="Merge duplicate vertices (-30~50%)"
+                      checked={exportOptions.weldVertices}
+                      onChange={(value) =>
+                        updateExportOption("weldVertices", value)
+                      }
+                    />
+                    <ExportOptionRow
+                      label="Strip UV"
+                      hint="Drop unused texture coords (-25%)"
+                      checked={exportOptions.stripUv}
+                      onChange={(value) =>
+                        updateExportOption("stripUv", value)
+                      }
+                    />
+                    <ExportOptionRow
+                      label="Smart tessellation"
+                      hint="Skip dome subdivision on small shapes (-50%+)"
+                      disabled={!activeDomeSettings.enabled}
+                      disabledHint="Requires Arc dome enabled"
+                      checked={exportOptions.smartTessellation}
+                      onChange={(value) =>
+                        updateExportOption("smartTessellation", value)
+                      }
+                    />
+                    <ExportOptionRow
+                      label="Simplify curves"
+                      hint="Halve curve & bevel segments (-40~60%)"
+                      checked={exportOptions.simplifyCurves}
+                      onChange={(value) =>
+                        updateExportOption("simplifyCurves", value)
+                      }
+                    />
+                  </div>
+                ) : null}
               </div>
               <div className="export-actions">
                 <button

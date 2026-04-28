@@ -28,6 +28,7 @@ import {
   DEFAULT_SVG,
 } from "@/lib/defaults";
 import { downloadBlob, exportMedalGlb } from "@/lib/export-model";
+import { loadGlbExportOptions } from "@/lib/export-options";
 import { waitForIdle } from "@/lib/idle";
 import { generateWorkSnapshot, needsSnapshot } from "@/lib/snapshot";
 import type { SavedWorkSummary, WorkDocument } from "@/lib/types";
@@ -1095,7 +1096,11 @@ export function WorkspaceHome() {
     }
 
     const asset = getPrimarySvgAsset(document);
-    const blob = await exportMedalGlb(asset.text, document.scene.settings);
+    const blob = await exportMedalGlb(
+      asset.text,
+      document.scene.settings,
+      loadGlbExportOptions(),
+    );
     downloadBlob(blob, `${getSafeFileStem(document.document.title)}.glb`);
   }
 

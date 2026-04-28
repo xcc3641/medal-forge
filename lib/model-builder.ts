@@ -332,9 +332,15 @@ function getDomeDisplacement(radius: number, domeRadius: number, depth: number) 
   );
 }
 
+/// 小形状阈值: 当形状最大边 < modelSize 这个比例时, 视为"装饰", 跳过 dome 细分.
+/// 0.2 凑出来的: 一个直径 < 20% medal 的形状, dome 弧度在它内部 < 1% 自身大小,
+/// 给所有顶点一个均匀位移 (而不是细分后逐顶点位移) 视觉无差.
+const SMART_TESSELLATION_THRESHOLD = 0.2;
+
 function applyDomeToGeometry(
   geometry: THREE.BufferGeometry,
   settings: MedalSettings,
+  smartTessellation: boolean = false,
 ) {
   const dome = resolveDomeSettings(settings);
 
@@ -344,6 +350,33 @@ function applyDomeToGeometry(
   }
 
   const domeRadius = Math.max(settings.modelSize * dome.radius * 0.5, 0.001);
+
+  // Smart tessellation: 小形状跳过 TessellateModifier, 直接对现有顶点位移.
+  // 大形状走完整细分路径. 这是省 50%+ 顶点的关键开关.
+  if (smartTessellation) {
+    geometry.computeBoundingBox();
+    const bb = geometry.boundingBox;
+    if (bb) {
+      const shapeMax = Math.max(bb.max.x - bb.min.x, bb.max.y - bb.min.y);
+      if (shapeMax / settings.modelSize < SMART_TESSELLATION_THRESHOLD) {
+        const positions = geometry.getAttribute("position");
+        for (let index = 0; index < positions.count; index += 1) {
+          const x = positions.getX(index);
+          const y = positions.getY(index);
+          const radius = Math.sqrt(x * x + y * y);
+          positions.setZ(
+            index,
+            positions.getZ(index) +
+              getDomeDisplacement(radius, domeRadius, dome.depth),
+          );
+        }
+        positions.needsUpdate = true;
+        geometry.computeVertexNormals();
+        return geometry;
+      }
+    }
+  }
+
   const maxEdgeLength =
     settings.modelSize / Math.max(4, Math.round(dome.segments));
   const modifier = new TessellateModifier(maxEdgeLength, 7);
@@ -403,10 +436,25 @@ function addHighlightOutline(mesh: THREE.Mesh) {
   mesh.add(outline);
 }
 
+export interface BuildMedalGroupOptions {
+  /// 小形状跳过 dome 细分. 默认 false (build = 预览路径, 不优化).
+  /// 导出时 (export-model.ts) 会按用户偏好传 true.
+  smartTessellation?: boolean;
+
+  /// 把每个 shape 的 curveSegments 和 bevelSegments 减半.
+  /// dome 关时 ExtrudeGeometry 是顶点数大头, 这是唯一能下刀的地方.
+  /// 默认 false.
+  simplifyCurves?: boolean;
+}
+
+/// curveSegments 下限: 8 段以下圆弧明显多边形化. 30+ 看不出区别.
+const CURVE_SEGMENTS_FLOOR = 8;
+
 export function buildMedalGroup(
   svgText: string,
   settings: MedalSettings,
   highlightedPathIndex: number | null = null,
+  options: BuildMedalGroupOptions = {},
 ): THREE.Group {
   const group = new THREE.Group();
   group.name = "medal-forge-model";
@@ -438,6 +486,18 @@ export function buildMedalGroup(
       continue;
     }
 
+    const curveSegments = options.simplifyCurves
+      ? Math.max(
+          CURVE_SEGMENTS_FLOOR,
+          Math.round(shapeSettings.curveSegments / 2),
+        )
+      : shapeSettings.curveSegments;
+    // bevelSegments=0 表示没倒角, 必须保留 0; 其它情况减半但 floor=1.
+    const bevelSegments =
+      options.simplifyCurves && shapeSettings.bevelSegments > 0
+        ? Math.max(1, Math.round(shapeSettings.bevelSegments / 2))
+        : shapeSettings.bevelSegments;
+
     const geometry = applyDomeToGeometry(
       createSvgGeometry(
         record.shape,
@@ -445,11 +505,12 @@ export function buildMedalGroup(
         scale,
         shapeSettings.thickness,
         shapeSettings.bevel,
-        shapeSettings.curveSegments,
-        shapeSettings.bevelSegments,
+        curveSegments,
+        bevelSegments,
         shapeSettings.depthSteps,
       ),
       settings,
+      options.smartTessellation ?? false,
     );
     const mesh = new THREE.Mesh(
       geometry,

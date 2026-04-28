@@ -459,6 +459,84 @@ button {
   gap: 10px;
 }
 
+.export-options {
+  margin-bottom: 10px;
+}
+
+.export-options-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: #424b57;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.export-options-toggle:hover {
+  background: #f0f2f5;
+}
+
+.export-options-count {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  color: #768493;
+  font-weight: 500;
+}
+
+.export-options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 10px;
+  background: #f0f2f5;
+  border-radius: 6px;
+}
+
+.export-option-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.export-option-row-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.export-option-row-disabled input[type="checkbox"] {
+  cursor: not-allowed;
+}
+
+.export-option-row input[type="checkbox"] {
+  margin-top: 2px;
+  cursor: pointer;
+}
+
+.export-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.export-option-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1f2933;
+}
+
+.export-option-hint {
+  font-size: 11px;
+  color: #768493;
+}
+
 .export-button {
   width: 100%;
   min-height: 44px;
